@@ -50,84 +50,109 @@ public class Sm83 {
 	}
 	
 	public int clock() {
-		if ((regs.timerControl & 0x4) != 0) {
-			regs.timerCycle++;
-			
-			int clockSelectBits = regs.timerControl & 0x03;
-			int clockDivisor = 16;
-			switch(clockSelectBits) {
-			case 0: clockDivisor = 1024; break;
-			case 1: clockDivisor = 16; break;
-			case 2: clockDivisor = 64; break;
-			case 3: clockDivisor = 256; break;
-			default: throw new RuntimeException("oops");
-			}
-			
-			if (regs.timerCycle>clockDivisor) {
-				int interruptFlag = bus.read(0xFF0F);
-				interruptFlag |= 0x4;
-				bus.write(0xFF0F, interruptFlag);
-				regs.timerCycle = 0;
-			}
+		
+		if (regs.enableInterrupts || regs.waitForInterrupt) {
+			int interruptEnable = bus.read(0xFFFF);
+			int interruptFlag = bus.read(0xFF0F);
+			int toFire = interruptEnable & interruptFlag;
+			if (toFire!=0) regs.waitForInterrupt = false;
 		}
 		
 		if (regs.enableInterrupts) {
 			int interruptEnable = bus.read(0xFFFF);
 			int interruptFlag = bus.read(0xFF0F);
 			int toFire = interruptEnable & interruptFlag;
-			//System.out.println("IE: "+Debug.hexByte(interruptEnable)+"IF: "+Debug.hexByte(interruptFlag)+" Queue: "+toFire);
+			//System.out.println("IME: "+regs.enableInterrupts+" IE: "+Debug.hexByte(interruptEnable)+"IF: "+Debug.hexByte(interruptFlag)+" Queue: "+toFire);
+			
 			if ((toFire & 0x1)!=0) {
 				interrupt(interruptFlag, 0x1, 0x40);
 				return 5;
 			}
 			
 			if ((toFire & 0x4)!=0) {
+				//System.out.println("firing timer interrupt at pc: "+Debug.hexShort(regs.pc));
+				//debug=true;
 				interrupt(interruptFlag, 0x4, 0x50);
+				return 5;
 			}
 		}
 		
-		//Grab instruction
-		regs.instructionAddress = (int) regs.pc;
-		
-		int op = bus.read(regs.pc) & 0xFF;
-		regs.pc++;
-		instructionData[0] = op;
-		
-		boolean cb = op==0xCB;
-		if (cb) {
-			op = bus.read(regs.pc) & 0xFF;
-			regs.pc++;
-			instructionData[1] = op;
-		}
-		
-		SM83Opcode opcode = (cb) ? cbInstructionLogic[op] : instructionLogic[op];
-		
-		int opSize = (cb) ? CB_INSTRUCTION_SIZE[op] : INSTRUCTION_SIZE[op];
-		
-		for(int i=(cb)?2:1; i<opSize; i++) {
-			instructionData[i] = bus.read(regs.pc) & 0xFF;
-			regs.pc++;
-		}
-		
-		Operand destOperand = (cb) ? cbInstructionDestOperand[op] : instructionDestOperand[op];
-		Operand sourceOperand = (cb) ? cbInstructionSourceOperand[op] : instructionSourceOperand[op];
-		
 		int cycles = 0;
-		if (opcode!=null) {
-			cycles = opcode.execute(instructionData, destOperand, sourceOperand, bus, regs);
-			if (debug) System.out.println(trace(instructionData));
+		if (!regs.waitForInterrupt) {
+		
+			//Grab instruction
+			regs.instructionAddress = (int) regs.pc;
+			
+			int op = bus.read(regs.pc) & 0xFF;
+			regs.pc++;
+			instructionData[0] = op;
+			
+			boolean cb = op==0xCB;
+			if (cb) {
+				op = bus.read(regs.pc) & 0xFF;
+				regs.pc++;
+				instructionData[1] = op;
+			}
+			
+			SM83Opcode opcode = (cb) ? cbInstructionLogic[op] : instructionLogic[op];
+			
+			int opSize = (cb) ? CB_INSTRUCTION_SIZE[op] : INSTRUCTION_SIZE[op];
+			
+			for(int i=(cb)?2:1; i<opSize; i++) {
+				instructionData[i] = bus.read(regs.pc) & 0xFF;
+				regs.pc++;
+			}
+			
+			Operand destOperand = (cb) ? cbInstructionDestOperand[op] : instructionDestOperand[op];
+			Operand sourceOperand = (cb) ? cbInstructionSourceOperand[op] : instructionSourceOperand[op];
+			
+			if (opcode!=null) {
+				cycles = opcode.execute(instructionData, destOperand, sourceOperand, bus, regs);
+				if (debug) System.out.println(trace(instructionData));
+			} else {
+				System.out.println("NO INSTRUCTION LOGIC FOR 0x"+Integer.toHexString(op));
+			}
+			
+			//if (regs.pc==0x0100) debug = true;
+			//if (regs.pc==0xc2c0) debug = true;
+			//if (regs.pc==0xc1b9) debug = false;
+			//if (regs.pc==0xc342) debug = true;
+			
+			if (instructionData[0] == 0x18 && instructionData[1] == 0xfe) {
+				if (debug) System.out.println("Machine caught in intentional crash. Stopping.");
+				regs.stopped = true;
+			}
 		} else {
-			System.out.println("NO INSTRUCTION LOGIC FOR 0x"+Integer.toHexString(op));
+			cycles = 4;
 		}
 		
-		//if (regs.pc==0x0100) debug = true;
-		//if (regs.pc==0xc33b) debug = true;
-		//if (regs.pc==0xc05a) debug = false;
-		//if (regs.pc==0xc342) debug = true;
-		
-		if (instructionData[0] == 0x18 && instructionData[1] == 0xfe) {
-			if (debug) System.out.println("Machine caught in intentional crash. Stopping.");
-			regs.stopped = true;
+		//update timer
+		if ((regs.timerControl & 0x4) != 0) {
+			regs.timerCycle += cycles;
+			
+			int clockSelectBits = regs.timerControl & 0x03;
+			
+			int clockDivisor = 16;
+			switch(clockSelectBits) {
+			case 0: clockDivisor = 1024; break;
+			case 1: clockDivisor = 16; break;
+			case 2: clockDivisor = 64; break;
+			case 3: clockDivisor = 256; break;
+			}
+			
+			while (regs.timerCycle>=clockDivisor) {
+				regs.timerCounter++;
+				regs.timerCycle -= clockDivisor;
+				if (regs.timerCounter > 0xFF) {
+					//request the timer interrupt because we went over
+					
+					int interruptFlag = bus.read(0xFF0F);
+					interruptFlag |= 0x4;
+					bus.write(0xFF0F, interruptFlag);
+					
+					regs.timerCounter = regs.timerResetValue;
+				}
+			}
 		}
 		
 		return cycles;
@@ -141,9 +166,26 @@ public class Sm83 {
 		regs.timerControl = value & 0x07;
 	}
 	
+	public int readTimerCounter() {
+		return regs.timerCounter & 0xFF;
+	}
+	
+	public void writeTimerCounter(int value) {
+		regs.timerCounter = value & 0xFF;
+	}
+	
+	public int readTimerResetValue() {
+		return regs.timerResetValue & 0xFF;
+	}
+	
+	public void writeTimerResetValue(int value) {
+		regs.timerResetValue = value & 0xFF;
+	}
+	
 	private void interrupt(int flagContents, int flag, int i) {
 		//System.out.println("CPU acknowledges interrupt: "+Debug.hexByte(i));
 		regs.enableInterrupts = false;
+		regs.waitForInterrupt = false; //take us out of HALT if we're in HALT
 		flagContents = flagContents & ~flag; //clear from IF so we don't double-interrupt
 		bus.write(0xFF0F, flagContents);
 		
@@ -226,6 +268,11 @@ public class Sm83 {
 	
 	public static SM83Opcode NOP = (inst, dest, src, bus, regs) -> 4; // - - - -
 	public static SM83Opcode STOP = (inst, dest, src, bus, regs) -> { regs.stopped = true; return 4; }; // - - - -
+	public static SM83Opcode HALT = (inst, dest, src, bus, regs) -> {
+		//System.out.println("waiting for interrupt");
+		// - - - -
+		regs.waitForInterrupt = true; return 4;
+	};
 	
 	public static SM83Opcode LD = (inst, dest, src, bus, regs) -> {
 		int value = load(inst, dest, src);
@@ -288,18 +335,17 @@ public class Sm83 {
 		return 4;
 	};
 	
-	public static SM83Opcode DEC = (inst, op1, op2, bus, regs) -> {
-		int value = load(inst, op1, op2);
+	public static SM83Opcode DEC = (inst, dest, src, bus, regs) -> {
+		int m = src.load(inst);
+		int value = (m - 1) & 0xFF;
 		
 		// Z 1 H -
-		
-		regs.set(Sm83Registers.FLAG_SUBTRACT);
-		regs.affectH(value, 0xFF);
-		value = (value - 1) & 0xFF;
 		regs.affectZ(value);
+		regs.set(Sm83Registers.FLAG_SUBTRACT);
+		regs.set(Sm83Registers.FLAG_HALF_CARRY, (value & 0xf) > (m & 0xf));
 		
-		store(inst, op1, op2, value);
-		postfix(op1, op2);
+		dest.store(inst, value);
+		dest.postfix();
 		
 		return 4;
 	};
@@ -368,22 +414,17 @@ public class Sm83 {
 		int m = dest.load(inst) & 0xFF;
 		int n = src.load(inst) & 0xFF;
 		int c = regs.isSet(Sm83Registers.FLAG_CARRY) ? 1 : 0;
-		int value = m - n - c;
 		
-		//System.out.println("Before; m: "+Debug.hexShort(m)+" n: "+Debug.hexShort(n)+" a: "+Debug.hexShort(regs.getA())+" flags: "+regs.flagString());
-		
+		int value = (m - n) - c;
 		
 		// Z 1 H C
-		regs.affectZ(value & 0xFF);
+		regs.affectZ(value);
 		regs.set(Sm83Registers.FLAG_SUBTRACT);
-		regs.affectH(m, -n, -c);
-		regs.affectC(value);
-		value &= 0xFF;
+		regs.set(Sm83Registers.FLAG_HALF_CARRY, (( n & 0xf ) + c ) > ( m & 0xf ));
+		regs.set(Sm83Registers.FLAG_CARRY, ((m - n) - c) < 0);
 		
 		dest.store(inst, value);
 		postfix(dest, src);
-		
-		//System.out.println("After; a: "+Debug.hexShort(regs.getA())+" flags: "+regs.flagString());
 		
 		return 4;
 	};
@@ -405,22 +446,21 @@ public class Sm83 {
 		return 4;
 	};
 	
+	
+	//specific logic for `add sp, r8`
 	public static SM83Opcode ADD16_8 = (inst, dest, src, bus, regs) -> {
 		int m = dest.load(inst) & 0xFFFF;
-		int n = src.load(inst) & 0xFFFF;
+		int n = src.load(inst);
 		int value = m + n;
 		
-		//System.out.println("Before; m: "+Debug.hexShort(m)+" n: "+Debug.hexShort(n)+" sp: "+Debug.hexShort(regs.sp)+" flags: "+regs.flagString());
-		
-		// - 0 H C
+		// 0 0 H C
+		regs.clear(Sm83Registers.FLAG_ZERO);
 		regs.clear(Sm83Registers.FLAG_SUBTRACT);
-		regs.affectH(m, n);
-		regs.affectC((m&0xFF)+(n&0xFF));
+		regs.set(Sm83Registers.FLAG_HALF_CARRY, ( m & 0xf ) > ( value & 0xf ));
+		regs.set(Sm83Registers.FLAG_CARRY, ( m & 0xff ) > ( value & 0xff ));
 		value &= 0xFFFF;
 		
 		dest.store(inst, value);
-		
-		//System.out.println("After; sp: "+Debug.hexShort(regs.sp)+" flags: "+regs.flagString());
 		
 		return 4;
 	};
@@ -654,15 +694,14 @@ public class Sm83 {
 		int value = src.load(inst);
 		boolean c = (value & 0x80) != 0;
 		
-		// Z 0 0 C
-		regs.clear(Sm83Registers.FLAG_SUBTRACT);
-		regs.clear(Sm83Registers.FLAG_HALF_CARRY);
-		Sm83Registers.FLAG_CARRY.set(regs.af, c);
-		//Roll it
 		value = (value << 1) & 0xFF;
 		if (c) value |= 1;
 		
+		// Z 0 0 C
 		regs.affectZ(value);
+		regs.clear(Sm83Registers.FLAG_SUBTRACT);
+		regs.clear(Sm83Registers.FLAG_HALF_CARRY);
+		regs.set(Sm83Registers.FLAG_CARRY, c);
 		
 		dest.store(inst, value);
 		postfix(dest, src);
@@ -674,16 +713,14 @@ public class Sm83 {
 		int value = src.load(inst);
 		boolean c = (value & 0x01) != 0;
 		
-		// Z 0 0 C
-		
-		regs.clear(Sm83Registers.FLAG_SUBTRACT);
-		regs.clear(Sm83Registers.FLAG_HALF_CARRY);
-		Sm83Registers.FLAG_CARRY.set(regs.af, c);
-		//Roll it
 		value = (value >> 1) & 0xFF;
 		if (c) value |= 0x80;
 		
+		// Z 0 0 C
 		regs.affectZ(value);
+		regs.clear(Sm83Registers.FLAG_SUBTRACT);
+		regs.clear(Sm83Registers.FLAG_HALF_CARRY);
+		regs.set(Sm83Registers.FLAG_CARRY, c);
 		
 		dest.store(inst, value);
 		dest.postfix();
@@ -834,10 +871,10 @@ public class Sm83 {
 	
 	/** "Complement" */
 	public static SM83Opcode CPL = (inst, op1, op2, bus, regs) -> {
-		regs.setA(~regs.getA());
+		regs.setA(regs.getA() ^ 0xFF);
 		// - 0 0 -
-		regs.clear(Sm83Registers.FLAG_SUBTRACT);
-		regs.clear(Sm83Registers.FLAG_HALF_CARRY);
+		regs.set(Sm83Registers.FLAG_SUBTRACT);
+		regs.set(Sm83Registers.FLAG_HALF_CARRY);
 		
 		return 4;
 	};
@@ -847,28 +884,22 @@ public class Sm83 {
 	public static SM83Opcode CMP = (inst, dest, src, bus, regs) -> {
 		int m = dest.load(inst) & 0xFF;
 		int n = src.load(inst) & 0xFF;
-		//negate n with Bitwise Magic(tm)
-		int nInverse = ((~n) + 1) & 0xFF;
 		
-		int value = m - n;
-		
-		if (inst[0]==0xFE) {
-			//System.out.println("Before; m: "+Debug.hexByte(m)+" n: "+Debug.hexByte(n)+" value: "+Debug.hexByte(value)+" flags: "+regs.flagString());
-		}
+		//-n == (~n) + 1
+		int negativeN = (~n) & 0xFF;
+		negativeN = (negativeN + 1) & 0xFF;
+		int value = m+negativeN;
 		
 		// Z 1 H C
-		regs.affectZ(value & 0xFF);
 		regs.set(Sm83Registers.FLAG_SUBTRACT);
-		regs.affectH(m, nInverse);
-		regs.affectC(value & 0x1FF);
-		value &= 0xFF;
+		regs.set(Sm83Registers.FLAG_HALF_CARRY, (m&0xF) < (n&0xF));
+		regs.set(Sm83Registers.FLAG_CARRY, m<n);
+		value = value & 0xFF;
+		
+		regs.affectZ(value);
 		
 		//in SUB we'd store here but we're not SUB
 		postfix(dest, src);
-		
-		if (inst[0]==0xFE) {
-			//System.out.println("After; flags: "+regs.flagString());
-		}
 		
 		return 4;
 	};
@@ -932,7 +963,7 @@ public class Sm83 {
 	};
 	
 	public static SM83Opcode DI = (inst, op1, op2, bus, regs) -> {
-		
+		//System.out.println("DI");
 		// - - - -
 		
 		regs.enableInterrupts = false;
@@ -940,7 +971,7 @@ public class Sm83 {
 	};
 	
 	public static SM83Opcode RETI = (inst, op1, op2, bus, regs) -> {
-		
+		//System.out.println("RETI (enables interrupts)");
 		// - - - -
 		
 		int value = pop16(bus, regs);
@@ -1354,10 +1385,10 @@ public class Sm83 {
 	/* 90 */ "sub",  "sub", "sub", "sub", "sub", "sub", "sub", "sub", "sbc", "sbc", "sbc", "sbc", "sbc", "sbc", "sbc", "sbc",
 	/* A0 */ "and",  "and", "and", "and", "and", "and", "and", "and", "xor", "xor", "xor", "xor", "xor", "xor", "xor", "xor",
 	/* B0 */ "or",   "or",  "or",  "or",  "or",  "or",  "or",  "or",  "cmp", "cmp", "cmp", "cmp", "cmp", "cmp", "cmp", "cmp",
-	/* C0 */ "retnz","pop", "jnz", "jmp", "call","push","add", "rst", "ret", "ret", "jmp", ":CB:","call","call","adc", "rst",
-	/* D0 */ "retnc","pop", "jnc", null,  "call","push","sub", "rst", "ret", "reti","jmp", null,  "call",null,  "sbc", "rst",
+	/* C0 */ "retnz","pop", "jnz", "jmp", "call","push","add", "rst", "ret", "ret", "jz",  ":CB:","call","call","adc", "rst",
+	/* D0 */ "retnc","pop", "jnc", null,  "call","push","sub", "rst", "ret", "reti","jc",  null,  "call",null,  "sbc", "rst",
 	/* E0 */ "ld",   "pop", "ld",  null,  null,  "push","and", "rst", "add", "jmp", "ld",  null,  null,  null,  "xor", "rst",
-	/* F0 */ "ld",   "pop", "ld",  "di",  null,  "push","or",  "rst", "ld",  "ld",  "ld",  "EI",  null,  null,  "cmp", "rst",
+	/* F0 */ "ld",   "pop", "ld",  "di",  null,  "push","or",  "rst","ld hl","ld",  "ld",  "EI",  null,  null,  "cmp", "rst",
 	};
 	
 	/** Size of each instruction in bytes, including the opcode byte */
@@ -1397,7 +1428,7 @@ public class Sm83 {
 	/* 40 */  LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,
 	/* 50 */  LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,
 	/* 60 */  LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,
-	/* 70 */  LD,    LD,    LD,    LD,    LD,    LD,    STOP,  LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,
+	/* 70 */  LD,    LD,    LD,    LD,    LD,    LD,    HALT,  LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,    LD,
 	/* 80 */  ADD,   ADD,   ADD,   ADD,   ADD,   ADD,   ADD,   ADD,   ADC,   ADC,   ADC,   ADC,   ADC,   ADC,   ADC,   ADC,
 	/* 90 */  SUB,   SUB,   SUB,   SUB,   SUB,   SUB,   SUB,   SUB,   SBC,   SBC,   SBC,   SBC,   SBC,   SBC,   SBC,   SBC,
 	/* A0 */  AND,   AND,   AND,   AND,   AND,   AND,   AND,   AND,   XOR,   XOR,   XOR,   XOR,   XOR,   XOR,   XOR,   XOR,
@@ -1494,7 +1525,7 @@ public class Sm83 {
 	
 	public final SM83Opcode[] cbInstructionLogic = {
 	/*        00     01     02     03     04     05     06     07     08     09     0A     0B     0C     0D     0E     0F */
-	/* 00 */  RLC,   RLC,   RLC,   RLC,   RLC,   RLC,   RLC,   RRC,   RRC,   RRC,   RRC,   RRC,   RRC,   RRC,   RRC,   RRC,
+	/* 00 */  RLC,   RLC,   RLC,   RLC,   RLC,   RLC,   RLC,   RLC,   RRC,   RRC,   RRC,   RRC,   RRC,   RRC,   RRC,   RRC,
 	/* 10 */  RL,    RL,    RL,    RL,    RL,    RL,    RL,    RL,    RR,    RR,    RR,    RR,    RR,    RR,    RR,    RR,
 	/* 20 */  SLA,   SLA,   SLA,   SLA,   SLA,   SLA,   SLA,   SLA,   SRA,   SRA,   SRA,   SRA,   SRA,   SRA,   SRA,   SRA,
 	/* 30 */  SWAP,  SWAP,  SWAP,  SWAP,  SWAP,  SWAP,  SWAP,  SWAP,  SRL,   SRL,   SRL,   SRL,   SRL,   SRL,   SRL,   SRL,
@@ -1517,7 +1548,7 @@ public class Sm83 {
 	/* 00 */  b,     c,     d,     e,     h,     l,     hl_i,  a,     b,     c,     d,     e,     h,     l,     hl_i,  a,
 	/* 10 */  b,     c,     d,     e,     h,     l,     hl_i,  a,     b,     c,     d,     e,     h,     l,     hl_i,  a,
 	/* 20 */  b,     c,     d,     e,     h,     l,     hl_i,  a,     b,     c,     d,     e,     h,     l,     hl_i,  a,
-	/* 30 */  c,     c,     d,     e,     h,     l,     hl_i,  a,     b,     c,     d,     e,     h,     l,     hl_i,  a,
+	/* 30 */  b,     c,     d,     e,     h,     l,     hl_i,  a,     b,     c,     d,     e,     h,     l,     hl_i,  a,
 	/* 40 */  b,     c,     d,     e,     h,     l,     hl_i,  a,     b,     c,     d,     e,     h,     l,     hl_i,  a,
 	/* 50 */  b,     c,     d,     e,     h,     l,     hl_i,  a,     b,     c,     d,     e,     h,     l,     hl_i,  a,
 	/* 60 */  b,     c,     d,     e,     h,     l,     hl_i,  a,     b,     c,     d,     e,     h,     l,     hl_i,  a,

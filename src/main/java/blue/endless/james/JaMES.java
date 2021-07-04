@@ -43,18 +43,18 @@ public class JaMES {
 			
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/gekkio_daa.gb")), (GameBoyCore)core);
 			
-			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/cpu_instrs.gb")), (GameBoyCore)core); //hang (because of 02)
+			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/cpu_instrs.gb")), (GameBoyCore)core); //passes 6 tests
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/01-special.gb")), (GameBoyCore)core); //pass
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/02-interrupts.gb")), (GameBoyCore)core); //pass
-			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/03-op sp,hl.gb")), (GameBoyCore)core); //fail - 1 test remaining! (E8)
-			GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/04-op r,imm.gb")), (GameBoyCore)core); //fail
-			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/05-op rp.gb")), (GameBoyCore)core); //fail
+			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/03-op sp,hl.gb")), (GameBoyCore)core); //pass
+			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/04-op r,imm.gb")), (GameBoyCore)core); //pass
+			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/05-op rp.gb")), (GameBoyCore)core); //pass
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/06-ld r,r.gb")), (GameBoyCore)core); //pass
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/07-jr,jp,call,ret,rst.gb")), (GameBoyCore)core); //pass
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/08-misc instrs.gb")), (GameBoyCore)core); //pass
-			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/09-op r,r.gb")), (GameBoyCore)core); //fail
+			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/09-op r,r.gb")), (GameBoyCore)core); //pass
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/10-bit ops.gb")), (GameBoyCore)core); //pass
-			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/11-op a,(hl).gb")), (GameBoyCore)core); //fail
+			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/11-op a,(hl).gb")), (GameBoyCore)core); //pass
 			
 			//PPU tests
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/dmg-acid2.gb")), (GameBoyCore)core);
@@ -62,7 +62,7 @@ public class JaMES {
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/ttt.gb")), (GameBoyCore)core);
 			
 			//Commercial games
-			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/Tetris(World)(RevA).gb")), (GameBoyCore)core);
+			GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/Tetris(World)(RevA).gb")), (GameBoyCore)core);
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/metroid2_world.gb")), (GameBoyCore)core);
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/oracle_of_seasons_us.gbc")), (GameBoyCore)core);
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/pokemon_red.gb")), (GameBoyCore)core);

@@ -33,6 +33,10 @@ public class GameBoyCore implements Core {
 		cpuBus.map(oam, 0xFE00);
 		cpuBus.map(this::readSerialData, this::writeSerialData, 0xFF01);
 		cpuBus.map(this::writeSerialControl, 0xFF02);
+		
+		//TODO: Timer divider at 0xFF04?
+		cpuBus.map(cpu::readTimerCounter, cpu::writeTimerCounter, 0xFF05);
+		cpuBus.map(cpu::readTimerResetValue, cpu::writeTimerResetValue, 0xFF06);
 		cpuBus.map(cpu::readTimerControl, cpu::writeTimerControl, 0xFF07);
 		cpuBus.map(ppu::readLcdControl, ppu::writeLcdControl, 0xFF40);
 		cpuBus.map(ppu::readLcdStatus, ppu::writeLcdStatus, 0xFF41);
@@ -132,6 +136,7 @@ public class GameBoyCore implements Core {
 	
 	public void writeOamDma(int value) {
 		int addr = (value & 0xFF) << 8;
+		if (addr<0xC000) return;
 		addr -= 0xC000;
 		addr = addr % 2000;
 		

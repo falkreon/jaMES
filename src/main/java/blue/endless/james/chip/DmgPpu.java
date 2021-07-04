@@ -129,7 +129,17 @@ public class DmgPpu {
 					
 					for(Sprite s : oamSearchResult) {
 						if (truePixel>=s.x && truePixel<s.x+8) {
-							screen[ofs] = 0xFFFF0000;
+							int spriteX = truePixel-s.x;
+							int spriteY = scanline - s.y;
+							int spriteDataStart = 0x8000 + (s.tile*16) + (spriteY*2);
+							int spriteRowLo = bus.read(spriteDataStart);
+							int spriteRowHi = bus.read(spriteDataStart + 1);
+							int spriteBitLo = (spriteRowLo >> (7-spriteX)) & 0x01;
+							int spriteBitHi = (spriteRowHi >> (7-spriteX)) & 0x01;
+							
+							int spritePal = (spriteBitHi << 1) | spriteBitLo;
+							
+							screen[ofs] = palette[spritePal];
 						}
 					}
 					
@@ -143,7 +153,7 @@ public class DmgPpu {
 				int baseAddress = 0xFE00+(i*4);
 				
 				int yPos = bus.read(baseAddress) - 16;
-				int xPos = bus.read(baseAddress+1);
+				int xPos = bus.read(baseAddress+1) - 8;
 				int tileIndex = bus.read(baseAddress+2);
 				int flags = bus.read(baseAddress+3);
 				
@@ -153,6 +163,7 @@ public class DmgPpu {
 				if (enabled) {
 					oamSearchResult.add(new Sprite(xPos, yPos, tileIndex, flags));
 				}
+				if (oamSearchResult.size()>=10) break;
 			}
 			//if (oamSearchResult.size()>0) System.out.println("OAM Search revealed "+oamSearchResult.size()+" sprites");
 		}
@@ -171,7 +182,7 @@ public class DmgPpu {
 	
 	//0xFF40 : LCDC
 	public void writeLcdControl(int value) {
-		//System.out.println("LCDControl: 0x"+Debug.hexByte(value));
+		System.out.println("LCDControl: 0x"+Debug.hexByte(value));
 		
 		boolean lastEnable = lcdEnable;
 		lcdEnable = ((value & 0x80) != 0);
@@ -179,18 +190,18 @@ public class DmgPpu {
 		if (lastEnable && !lcdEnable) {
 			Arrays.fill(screen, 0xFF_FFFFFF);
 			onPresentFrame.fire(screen);
-			//System.out.println("  LCDC.7 LCD Disable");
+			System.out.println("  LCDC.7 LCD Disable");
 		} else if (!lastEnable && lcdEnable) {
 			//Arrays.fill(screen, palette[0]);
-			//System.out.println("  LCDC.7 LCD Enable");
+			System.out.println("  LCDC.7 LCD Enable");
 		} else {
-			//System.out.println("  LCDC.7 No change (enable: "+lcdEnable+")");
+			System.out.println("  LCDC.7 No change (enable: "+lcdEnable+")");
 		}
 		absoluteBG = ((value & 0x10)!=0);
-		//System.out.println("  LCDC.4 Absolute BG: "+absoluteBG);
+		System.out.println("  LCDC.4 Absolute BG: "+absoluteBG);
 		
 		useHighTilemap = ((value & 0x08) != 0);
-		//System.out.println("  LCDC.3 use High Tilemap: "+useHighTilemap);
+		System.out.println("  LCDC.3 use High Tilemap: "+useHighTilemap);
 		
 		//System.out.println("Write LCDControl: 0x"+Integer.toHexString(value));
 	}
