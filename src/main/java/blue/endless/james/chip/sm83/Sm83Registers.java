@@ -22,7 +22,11 @@ public class Sm83Registers {
 	//INTERNAL EMULATOR REGS
 	public boolean stopped = false;
 	public int instructionAddress = 0;
-	public boolean enableInterrupts = true;
+	public boolean enableInterrupts = false;
+	public int interruptFlags = 0xFF;
+	
+	public int timerCycle = 0;
+	public int timerControl = 0;
 	
 	public int getA() {
 		return (af >> 8) & 0xFF;

@@ -6,6 +6,7 @@ import blue.endless.james.chip.DmgPpu;
 import blue.endless.james.chip.sm83.Sm83;
 import blue.endless.james.host.ControlSet;
 import blue.endless.james.host.Core;
+import blue.endless.james.host.Debug;
 import blue.endless.james.host.MappedBus;
 import blue.endless.tinyevents.impl.ConsumerEvent;
 
@@ -15,41 +16,51 @@ public class GameBoyCore implements Core {
 	private MappedBus cpuBus = new MappedBus();
 	private MappedBus ppuBus = new MappedBus();
 	private byte[] vram = new byte[0x2000];
-	private byte[] oam = new byte[40*4]; //0x9F
+	private byte[] oam = new byte[0xA0];
 	private byte[] ram = new byte[0x2000];
 	private byte[] bios = null;
 	private byte[] hram = new byte[0xFFFE-0xFF80];
 	private byte[] cart = null;
 	private int serialShiftRegister = 0xFF;
 	public String serialConsoleLine = "";
+	private byte[] interruptEnable = new byte[1];
+	private byte[] interruptFlag = new byte[1];
 	
 	public GameBoyCore() {
 		cpuBus.setUnmappedValue(0xFF);
 		cpuBus.map(vram, 0x8000);
 		cpuBus.map(ram,  0xC000, 0x3E00); //Mirrored up to FE00, size=3E00
-		cpuBus.map(oam, 0xF300);
+		cpuBus.map(oam, 0xFE00);
 		cpuBus.map(this::readSerialData, this::writeSerialData, 0xFF01);
 		cpuBus.map(this::writeSerialControl, 0xFF02);
+		cpuBus.map(cpu::readTimerControl, cpu::writeTimerControl, 0xFF07);
 		cpuBus.map(ppu::readLcdControl, ppu::writeLcdControl, 0xFF40);
 		cpuBus.map(ppu::readLcdStatus, ppu::writeLcdStatus, 0xFF41);
 		cpuBus.map(ppu::readSCY, ppu::writeSCY, 0xFF42);
 		cpuBus.map(ppu::readSCX, ppu::writeSCX, 0xFF43);
 		cpuBus.map(ppu::readLcdY, 0xFF44);
 		
-		
+		cpuBus.map(this::writeOamDma, 0xFF46);
 		cpuBus.map(ppu::readBGP, ppu::writeBGP, 0xFF47);
 		cpuBus.map(this::unmapBios, 0xFF50);
 		cpuBus.map(hram, 0xFF80);
+		cpuBus.map(interruptFlag, 0xFF0F);
+		cpuBus.map(interruptEnable, 0xFFFF);
 		cpu.bus = cpuBus;
 		
+		//This is not *really* how things work but I'm choosing to map it this way
 		ppuBus.setUnmappedValue(0xFF);
-		ppuBus.map(vram, 0x0000);
+		ppuBus.map(vram, 0x8000);
+		ppuBus.map(oam, 0xFE00);
+		ppuBus.map(interruptFlag, 0xFF0F);
+		ppuBus.map(interruptEnable, 0xFFFF);
 		ppu.bus = ppuBus;
 	}
 	
 	public int clock() {
+		if (cpu.regs.stopped) System.out.println("Stopped.");
 		int cycles = cpu.clock();
-		for(int i=0; i<cycles*/*2*/1; i++) ppu.clock();
+		for(int i=0; i<cycles*2; i++) ppu.clock();
 		
 		return cycles;
 	}
@@ -119,6 +130,17 @@ public class GameBoyCore implements Core {
 		return serialShiftRegister & 0xFF;
 	}
 	
+	public void writeOamDma(int value) {
+		int addr = (value & 0xFF) << 8;
+		addr -= 0xC000;
+		addr = addr % 2000;
+		
+		//System.out.println("OAMDMA: "+Debug.hexShort(addr+0xC000));
+		for(int i=0; i<0xA0; i++) {
+			oam[i] = ram[addr+i];
+		}
+	}
+	
 	public void writeSerialData(int i) {
 		serialShiftRegister = i & 0xFF;
 		//System.out.println("Serial register write: 0x"+Integer.toHexString(serialShiftRegister)+" ("+((char) serialShiftRegister)+")");
@@ -146,7 +168,7 @@ public class GameBoyCore implements Core {
 		cpuBus.map(this.cart, 0x0000);
 	}
 	
-	public void mapRom(DMGMapper mapper) {
+	public void mapRom(DmgMapper mapper) {
 		cpuBus.unmapAllMappers();
 		if (this.cart != null) cpuBus.unmap(this.cart);
 		this.cart = null;

@@ -1,8 +1,10 @@
 package blue.endless.james.chip;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import blue.endless.james.host.Bus;
+import blue.endless.james.host.Debug;
 import blue.endless.tinyevents.impl.ConsumerEvent;
 
 public class DmgPpu {
@@ -16,8 +18,16 @@ public class DmgPpu {
 	private Mode mode = Mode.OAM_SEARCH;
 	private int pixel = 0;
 	private int scanline = 0;
-	private ArrayList<Integer> oamSearchResult = new ArrayList<>();
+	private ArrayList<Sprite> oamSearchResult = new ArrayList<>();
 	private int[] screen = new int[160*144];
+	
+	private boolean lcdEnable = false;
+	private boolean absoluteBG = true;
+	private boolean useHighTilemap = false;
+	//private int bgTileArea = 0x8800;
+	private boolean tallSprites = false;
+	private boolean enableSprites = false;
+	
 	
 	/** Background Palette
 	 * 
@@ -32,9 +42,10 @@ public class DmgPpu {
 	int bgp = 0x00;
 	int scx = 0;
 	int scy = 0;
-	int[] palette = PAL_KIROKAZE;
+	int[] palette = PAL_WISH;
 	
 	public void clock() {
+		if (!lcdEnable) return;
 		pixel++;
 		if (pixel>456) {
 			pixel = 0;
@@ -61,8 +72,14 @@ public class DmgPpu {
 			}
 		} else if (scanline==144 && pixel==0) {
 			mode = mode.VBLANK;
+			
+			//Set IF to request vblank interrupt on the CPU
+			//System.out.println("writing vblank intrrupt");
+			int interruptFlag = bus.read(0xFF0F);
+			interruptFlag = interruptFlag | 0x01;
+			bus.write(0xFF0F, interruptFlag);
+			
 			//System.out.println("Transitioning to VBLANK");
-			//TODO: IRQ?
 		}
 		
 		if (mode==Mode.PICTURE) {
@@ -76,26 +93,68 @@ public class DmgPpu {
 					int fineY = (scanline+scy) % 8;
 					
 					int tilemapIndex = (coarseY*32) + coarseX;
-					//int tileId = bus.read(0x1800+tilemapIndex);
 					
-					int tileId = (coarseY*20) + coarseX; //256x256 field can fit 32, but we can't see them all
-					int base = (tileId*16) + (fineY*2);
+					int tilemapStart = (useHighTilemap) ? 0x9C00 : 0x9800;
+					int tileId = bus.read(tilemapStart+tilemapIndex);
+					
+					//int tileId = (coarseY*20) + coarseX; //256x256 field can fit 32, but we can't see them all
+					int charDataStart = 0;
+					if (!absoluteBG) {
+						if ((tileId & 0x80)!=0) {
+							charDataStart = 0x9000 + ((tileId&0x7F)*16);
+						} else {
+							tileId &= 0x7F;
+							charDataStart = 0x8800 + ((tileId&0x7F)*16);
+						}
+						
+					} else {
+						charDataStart = 0x8000 + (tileId*16);
+					}
+					charDataStart += (fineY*2);
 					//if (fineX==0) System.out.println("TileId: "+Integer.toHexString(tileId));
-					int tileRowLo = bus.read(base);
-					int tileRowHi = bus.read(base + 1);
+					int tileRowLo = bus.read(charDataStart);
+					int tileRowHi = bus.read(charDataStart + 1);
 					int tileBitLo = (tileRowLo >> (7-fineX)) & 0x01;
 					int tileBitHi = (tileRowHi >> (7-fineX)) & 0x01;
 					
 					int tilePal = (tileBitHi << 1) | tileBitLo;
 					
-					//int color = (bgp>>(tilePal*2)) & 0x03;
-					//color = palette[color];
+					int color = (bgp>>(tilePal*2)) & 0x03;
+					color = palette[color];
 					
-					int color = palette[tilePal]; //TODO: Map through bgp
+					//int color = palette[tilePal]; //TODO: Map through bgp
 					
 					screen[ofs] = color;
+					
+					
+					for(Sprite s : oamSearchResult) {
+						if (truePixel>=s.x && truePixel<s.x+8) {
+							screen[ofs] = 0xFFFF0000;
+						}
+					}
+					
+					
 				}
 			}
+		} else if (mode==Mode.OAM_SEARCH && pixel==0) {
+			oamSearchResult.clear();
+			
+			for(int i=0; i<40; i++) {
+				int baseAddress = 0xFE00+(i*4);
+				
+				int yPos = bus.read(baseAddress) - 16;
+				int xPos = bus.read(baseAddress+1);
+				int tileIndex = bus.read(baseAddress+2);
+				int flags = bus.read(baseAddress+3);
+				
+				//if (yPos!=-16 && yPos!=(255-16)) System.out.println("x: "+xPos+" y: "+yPos);
+				
+				boolean enabled = (scanline>=yPos && scanline<yPos+8);
+				if (enabled) {
+					oamSearchResult.add(new Sprite(xPos, yPos, tileIndex, flags));
+				}
+			}
+			//if (oamSearchResult.size()>0) System.out.println("OAM Search revealed "+oamSearchResult.size()+" sprites");
 		}
 		
 	}
@@ -112,6 +171,27 @@ public class DmgPpu {
 	
 	//0xFF40 : LCDC
 	public void writeLcdControl(int value) {
+		//System.out.println("LCDControl: 0x"+Debug.hexByte(value));
+		
+		boolean lastEnable = lcdEnable;
+		lcdEnable = ((value & 0x80) != 0);
+		
+		if (lastEnable && !lcdEnable) {
+			Arrays.fill(screen, 0xFF_FFFFFF);
+			onPresentFrame.fire(screen);
+			//System.out.println("  LCDC.7 LCD Disable");
+		} else if (!lastEnable && lcdEnable) {
+			//Arrays.fill(screen, palette[0]);
+			//System.out.println("  LCDC.7 LCD Enable");
+		} else {
+			//System.out.println("  LCDC.7 No change (enable: "+lcdEnable+")");
+		}
+		absoluteBG = ((value & 0x10)!=0);
+		//System.out.println("  LCDC.4 Absolute BG: "+absoluteBG);
+		
+		useHighTilemap = ((value & 0x08) != 0);
+		//System.out.println("  LCDC.3 use High Tilemap: "+useHighTilemap);
+		
 		//System.out.println("Write LCDControl: 0x"+Integer.toHexString(value));
 	}
 	
@@ -190,5 +270,19 @@ public class DmgPpu {
 		LIGHT_GRAY,
 		DARK_GRAY,
 		BLACK;
+	}
+	
+	private static class Sprite {
+		int x;
+		int y;
+		int tile;
+		int flags;
+		
+		public Sprite(int x, int y, int tile, int flags) {
+			this.x = x;
+			this.y = y;
+			this.tile = tile;
+			this.flags = flags;
+		}
 	}
 }

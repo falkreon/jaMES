@@ -6,7 +6,7 @@ import java.util.List;
 
 import blue.endless.james.host.Bus;
 
-public abstract class DMGMapper implements Bus {
+public abstract class DmgMapper implements Bus {
 	public static final int BANK_LENGTH    = 0x4000;
 	public static final int BANK_TWO_START = BANK_LENGTH;
 	public static final int BANK_TWO_END   = BANK_TWO_START + BANK_LENGTH;
@@ -59,7 +59,7 @@ public abstract class DMGMapper implements Bus {
 		return null;
 	}
 	
-	public static class None extends DMGMapper {
+	public static class None extends DmgMapper {
 		private byte[] lowBank;
 		private byte[] highBank;
 		
@@ -98,7 +98,7 @@ public abstract class DMGMapper implements Bus {
 		}
 	}
 	
-	public static class Mbc1 extends DMGMapper {
+	public static class Mbc1 extends DmgMapper {
 		private List<byte[]> banks;
 		private byte[] saveRam = new byte[RAM_LENGTH];
 		private int selectedBank = 1;
@@ -128,8 +128,6 @@ public abstract class DMGMapper implements Bus {
 
 		@Override
 		public void write(long address, int value) {
-			System.out.println("ROM WRITE: 0x"+Integer.toHexString(value)+" at (0x"+Integer.toHexString((int) address)+")");
-			
 			if (address >= 0x0000 && address < 0x2000) {
 				ramEnable = (value & 0x0F) == 0x0A;
 				System.out.println((ramEnable) ? "RAM Enabled" : "RAM disabled");
@@ -148,6 +146,8 @@ public abstract class DMGMapper implements Bus {
 				int localAddress = (int) address - RAM_START;
 				saveRam[localAddress % RAM_LENGTH] = (byte) value;
 				ramDirtyFlag = true;
+			} else {
+				System.out.println("ROM WRITE: 0x"+Integer.toHexString(value)+" at (0x"+Integer.toHexString((int) address)+")");
 			}
 		}
 		
@@ -167,7 +167,7 @@ public abstract class DMGMapper implements Bus {
 		}
 	}
 	
-	public static class Mbc5 extends DMGMapper {
+	public static class Mbc5 extends DmgMapper {
 		private List<byte[]> banks;
 		private byte[] saveRam = new byte[RAM_LENGTH];
 		private int selectedBank = 1;
@@ -198,8 +198,6 @@ public abstract class DMGMapper implements Bus {
 
 		@Override
 		public void write(long address, int value) {
-			System.out.println("ROM WRITE: 0x"+Integer.toHexString(value)+" at (0x"+Integer.toHexString((int) address)+")");
-			
 			if (address >= 0x0000 && address < 0x2000) {
 				ramEnable = (value & 0x0F) == 0x0A;
 				System.out.println((ramEnable) ? "RAM Enabled" : "RAM disabled");
@@ -221,6 +219,8 @@ public abstract class DMGMapper implements Bus {
 				int localAddress = (int) address - RAM_START;
 				saveRam[localAddress % RAM_LENGTH] = (byte) value;
 				ramDirtyFlag = true;
+			} else {
+				System.out.println("ROM WRITE: 0x"+Integer.toHexString(value)+" at (0x"+Integer.toHexString((int) address)+")");
 			}
 		}
 		

@@ -50,6 +50,42 @@ public class Sm83 {
 	}
 	
 	public int clock() {
+		if ((regs.timerControl & 0x4) != 0) {
+			regs.timerCycle++;
+			
+			int clockSelectBits = regs.timerControl & 0x03;
+			int clockDivisor = 16;
+			switch(clockSelectBits) {
+			case 0: clockDivisor = 1024; break;
+			case 1: clockDivisor = 16; break;
+			case 2: clockDivisor = 64; break;
+			case 3: clockDivisor = 256; break;
+			default: throw new RuntimeException("oops");
+			}
+			
+			if (regs.timerCycle>clockDivisor) {
+				int interruptFlag = bus.read(0xFF0F);
+				interruptFlag |= 0x4;
+				bus.write(0xFF0F, interruptFlag);
+				regs.timerCycle = 0;
+			}
+		}
+		
+		if (regs.enableInterrupts) {
+			int interruptEnable = bus.read(0xFFFF);
+			int interruptFlag = bus.read(0xFF0F);
+			int toFire = interruptEnable & interruptFlag;
+			//System.out.println("IE: "+Debug.hexByte(interruptEnable)+"IF: "+Debug.hexByte(interruptFlag)+" Queue: "+toFire);
+			if ((toFire & 0x1)!=0) {
+				interrupt(interruptFlag, 0x1, 0x40);
+				return 5;
+			}
+			
+			if ((toFire & 0x4)!=0) {
+				interrupt(interruptFlag, 0x4, 0x50);
+			}
+		}
+		
 		//Grab instruction
 		regs.instructionAddress = (int) regs.pc;
 		
@@ -84,6 +120,7 @@ public class Sm83 {
 			System.out.println("NO INSTRUCTION LOGIC FOR 0x"+Integer.toHexString(op));
 		}
 		
+		//if (regs.pc==0x0100) debug = true;
 		//if (regs.pc==0xc33b) debug = true;
 		//if (regs.pc==0xc05a) debug = false;
 		//if (regs.pc==0xc342) debug = true;
@@ -96,6 +133,24 @@ public class Sm83 {
 		return cycles;
 	}
 	
+	public int readTimerControl() {
+		return regs.timerControl & 0x07;
+	}
+	
+	public void writeTimerControl(int value) {
+		regs.timerControl = value & 0x07;
+	}
+	
+	private void interrupt(int flagContents, int flag, int i) {
+		//System.out.println("CPU acknowledges interrupt: "+Debug.hexByte(i));
+		regs.enableInterrupts = false;
+		flagContents = flagContents & ~flag; //clear from IF so we don't double-interrupt
+		bus.write(0xFF0F, flagContents);
+		
+		push16(bus, regs, regs.pc);
+		regs.pc = i & 0xFF;
+	}
+
 	public static boolean condition(int[] instruction, Sm83Registers regs) {
 		if (instruction[0] == 0xCB) return false; //OR THROW? :)
 		int hi = (instruction[0] >> 4) & 0xF;
@@ -158,9 +213,9 @@ public class Sm83 {
 		public String trace(int[] instruction) {
 			String result = Integer.toHexString(value);
 			if (result.length()==1 || result.length()==3) {
-				return "%0x0"+result;
+				return "0x0"+result;
 			} else {
-				return "%0x"+Integer.toHexString(value);
+				return "0x"+Integer.toHexString(value);
 			}
 		}
 	}
@@ -308,21 +363,26 @@ public class Sm83 {
 		return 4;
 	};
 	
-	public static SM83Opcode SBC = (inst, op1, op2, bus, regs) -> {
-		int m = op1.load(inst) & 0xFF;
-		int n = op2.load(inst) & 0xFF;
+	public static SM83Opcode SBC = (inst, dest, src, bus, regs) -> {
+		int m = dest.load(inst) & 0xFF;
+		int n = src.load(inst) & 0xFF;
 		int c = regs.isSet(Sm83Registers.FLAG_CARRY) ? 1 : 0;
 		int value = m - n - c;
 		
-		// Z 0 H C
-		regs.affectZ(value);
-		regs.clear(Sm83Registers.FLAG_SUBTRACT);
+		//System.out.println("Before; m: "+Debug.hexShort(m)+" n: "+Debug.hexShort(n)+" a: "+Debug.hexShort(regs.getA())+" flags: "+regs.flagString());
+		
+		
+		// Z 1 H C
+		regs.affectZ(value & 0xFF);
+		regs.set(Sm83Registers.FLAG_SUBTRACT);
 		regs.affectH(m, -n, -c);
 		regs.affectC(value);
 		value &= 0xFF;
 		
-		op1.store(inst, value);
-		postfix(op1, op2);
+		dest.store(inst, value);
+		postfix(dest, src);
+		
+		//System.out.println("After; a: "+Debug.hexShort(regs.getA())+" flags: "+regs.flagString());
 		
 		return 4;
 	};
@@ -863,7 +923,7 @@ public class Sm83 {
 	};
 	
 	public static SM83Opcode EI = (inst, op1, op2, bus, regs) -> {
-		
+		//System.out.println("EI");
 		// - - - -
 		
 		regs.enableInterrupts = true;
