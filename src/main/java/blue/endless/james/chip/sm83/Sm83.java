@@ -341,24 +341,25 @@ public class Sm83 {
 		return 4;
 	};
 	
-	public static SM83Opcode SUB = (inst, op1, op2, bus, regs) -> {
-		int m = op1.load(inst) & 0xFF;
-		int n = ( (op2==null) ? regs.getA() : op2.load(inst) ) & 0xFF;
-		int value = m - n;
+	public static SM83Opcode SUB = (inst, dest, src, bus, regs) -> {
+		int m = dest.load(inst) & 0xFF;
+		int n = src.load(inst) & 0xFF;
+		
+		//-n == (~n) + 1
+		int negativeN = (~n) & 0xFF;
+		negativeN = (negativeN + 1) & 0xFF;
+		int value = m+negativeN;
 		
 		// Z 1 H C
-		regs.affectZ(value);
 		regs.set(Sm83Registers.FLAG_SUBTRACT);
-		regs.affectH(m, n);
-		regs.affectC(value);
-		value &= 0xFF;
+		regs.set(Sm83Registers.FLAG_HALF_CARRY, (m&0xF) < (n&0xF));
+		regs.set(Sm83Registers.FLAG_CARRY, m<n);
+		value = value & 0xFF;
 		
-		if (op2==null) {
-			regs.setA(value);
-		} else {
-			op1.store(inst, value);
-		}
-		postfix(op1, op2);
+		regs.affectZ(value);
+		
+		dest.store(inst, value);
+		postfix(dest, src);
 		
 		return 4;
 	};
