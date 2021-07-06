@@ -102,7 +102,7 @@ public class JaMES {
 		
 		//now = now();
 		lastDisplay = now;
-		PeriodicTimer timer = PeriodicTimer.forFPS(60);
+		PeriodicTimer timer = PeriodicTimer.forFPS(59.73);
 		
 		long toClock = 0;
 		while(!core.isStopped()) {

@@ -89,8 +89,8 @@ public class DmgPpu {
 			if (truePixel<160) {
 				int ofs = scanline*160 + truePixel;
 				if (ofs<screen.length) {
-					int coarseX = (truePixel+scx) / 8;
-					int coarseY = (scanline+scy) / 8;
+					int coarseX = ((truePixel+scx)&0xFF) / 8;
+					int coarseY = ((scanline+scy)&0xFF) / 8;
 					int fineX = (truePixel+scx) % 8;
 					int fineY = (scanline+scy) % 8;
 					

@@ -130,7 +130,7 @@ public abstract class DmgMapper implements Bus {
 		public void write(long address, int value) {
 			if (address >= 0x0000 && address < 0x2000) {
 				ramEnable = (value & 0x0F) == 0x0A;
-				System.out.println((ramEnable) ? "RAM Enabled" : "RAM disabled");
+				//System.out.println((ramEnable) ? "RAM Enabled" : "RAM disabled");
 			} else if (address >= 0x2000 && address < 0x4000) {
 				value = value & 0b0011111; //lower 5 bits of bank number
 				if (value==0) value=1; //Cannot select bank 0 (or 0x20, or 0x40, or 0x60)
@@ -200,7 +200,7 @@ public abstract class DmgMapper implements Bus {
 		public void write(long address, int value) {
 			if (address >= 0x0000 && address < 0x2000) {
 				ramEnable = (value & 0x0F) == 0x0A;
-				System.out.println((ramEnable) ? "RAM Enabled" : "RAM disabled");
+				//System.out.println((ramEnable) ? "RAM Enabled" : "RAM disabled");
 			} else if (address >= 0x2000 && address < 0x3000) {
 				value = value & 0xFF; //lower 8 bits of bank number
 				selectedBank = selectedBank & 0xFF00;
