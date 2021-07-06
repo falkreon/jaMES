@@ -31,6 +31,17 @@ public class PeriodicTimer {
 		this.period = period;
 	}
 	
+	public void setPeriodMillis(long period) {
+		this.period = period;
+	}
+	
+	public void setPeriodHertz(double hertz) {
+		double period = (1.0/hertz)*1000.0;
+		this.period = (long) period;
+		this.errorSamples = (long) (hertz / 2.0);
+		this.curErrorSamples = 0L;
+	}
+	
 	public void waitForPeriod() {
 		long now = now();
 		long elapsed = now-previous;

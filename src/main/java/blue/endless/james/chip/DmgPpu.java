@@ -29,6 +29,8 @@ public class DmgPpu {
 	private boolean enableBackground = true;
 	private boolean enableWindow = false;
 	private boolean enableSprites = false;
+	private int windowX = 7;
+	private int windowY = 0;
 	
 	
 	/** Background Palette
@@ -104,10 +106,6 @@ public class DmgPpu {
 						//int tileId = (coarseY*20) + coarseX; //256x256 field can fit 32, but we can't see them all
 						int charDataStart = 0;
 						if (!absoluteBG) {
-							//if ((tileId & 0x80)!=0) tileId &= ~0xFF;
-							//charDataStart = 0x8800 + tileId;
-							
-							
 							if ((tileId & 0x80)!=0) {
 								tileId &= 0x7F;
 								charDataStart = 0x8800 + (tileId*16);
@@ -135,9 +133,53 @@ public class DmgPpu {
 						
 						//int color = palette[tilePal]; //TODO: Map through bgp
 						screen[ofs] = color;
+						
+						if (enableWindow) {
+							if (truePixel>=windowX && scanline>=windowY) {
+								int pixelWindowX = (truePixel-windowX) & 0xFF;
+								int pixelWindowY = (scanline-windowY) & 0xFF;
+								int coarseWindowX = pixelWindowX / 8;
+								int coarseWindowY = pixelWindowY / 8;
+								int fineWindowX = pixelWindowX % 8;
+								int fineWindowY = pixelWindowY % 8;
+								
+								int windowTilemapIndex = (coarseWindowY*32) + coarseWindowX;
+								int windowTilemapStart = (windowHighTilemap) ? 0x9C00 : 0x9800;
+								
+								int windowTileId = bus.read(windowTilemapStart + windowTilemapIndex);
+								
+								int wCharDataStart = 0;
+								if (!absoluteBG) {
+									if ((windowTileId & 0x80)!=0) {
+										windowTileId &= 0x7F;
+										wCharDataStart = 0x8800 + (windowTileId*16);
+									} else {
+										windowTileId &= 0x7F;
+										wCharDataStart = 0x9000 + (windowTileId*16);
+									}
+								} else {
+									wCharDataStart = 0x8000 + (windowTileId*16);
+								}
+								wCharDataStart += (fineWindowY*2);
+								
+								int wTileRowLo = bus.read(wCharDataStart);
+								int wTileRowHi = bus.read(wCharDataStart + 1);
+								int wTileBitLo = (wTileRowLo >> (7-fineWindowX)) & 0x01;
+								int wTileBitHi = (wTileRowHi >> (7-fineWindowX)) & 0x01;
+								
+								int windowPal = (wTileBitHi << 1) | wTileBitLo;
+								
+								int windowColor = (bgp>>(windowPal*2)) & 0x03; //yes, same palette as background, the bgp
+								windowColor = palette[windowColor];
+								screen[ofs] = windowColor;
+							}
+						}
+						
 					} else {
 						screen[ofs] = palette[0];
 					}
+					
+					
 					
 					if (enableSprites) {
 						for(Sprite s : oamSearchResult) {
@@ -211,7 +253,7 @@ public class DmgPpu {
 	
 	//0xFF40 : LCDC
 	public void writeLcdControl(int value) {
-		boolean print = false;
+		boolean print = true;
 		if (print) System.out.println("LCDControl: 0x"+Debug.hexByte(value));
 		
 		boolean lastEnable = lcdEnable;
@@ -229,13 +271,16 @@ public class DmgPpu {
 		}
 		
 		windowHighTilemap = ((value & 0x40) != 0);
-		if (print) System.out.println("  LCDC.6 High Tilemap: "+windowHighTilemap);
+		if (print) System.out.println("  LCDC.6 Window High Tilemap: "+windowHighTilemap);
+		
+		enableWindow = ((value & 0x20) != 0);
+		if (print) System.out.println("  LCDC.5 Enable Window: "+enableWindow);
 		
 		absoluteBG = ((value & 0x10) != 0);
 		if (print) System.out.println("  LCDC.4 Absolute BG: "+absoluteBG);
 		
 		useHighTilemap = ((value & 0x08) != 0);
-		if (print) System.out.println("  LCDC.3 use High Tilemap: "+useHighTilemap);
+		if (print) System.out.println("  LCDC.3 BG High Tilemap: "+useHighTilemap);
 		
 		tallSprites = ((value & 0x04) != 0);
 		if (print) System.out.println("  LCDC.2 Tall Sprites: "+tallSprites);
@@ -295,6 +340,24 @@ public class DmgPpu {
 	//0xFF47
 	public int readBGP() {
 		return bgp;
+	}
+	
+	//0xFF4A
+	public int readWindowY() {
+		return windowY;
+	}
+	
+	public void writeWindowY(int value) {
+		windowY = value;
+	}
+	
+	//0xFF4B
+	public int readWindowX() {
+		return windowX+7;
+	}
+	
+	public void writeWindowX(int value) {
+		windowX = value-7;
 	}
 	
 	public void writeBGP(int value) {

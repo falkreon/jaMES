@@ -63,8 +63,8 @@ public class JaMES {
 			
 			//Commercial games
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/Tetris(World)(RevA).gb")), (GameBoyCore)core);
-			GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/metroid2_world.gb")), (GameBoyCore)core);
-			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/kirbys_dream_land.gb")), (GameBoyCore)core);
+			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/metroid2_world.gb")), (GameBoyCore)core);
+			GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/kirbys_dream_land.gb")), (GameBoyCore)core);
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/oracle_of_seasons_us.gbc")), (GameBoyCore)core);
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/pokemon_red.gb")), (GameBoyCore)core);
 			
@@ -90,19 +90,58 @@ public class JaMES {
 		
 		core.hardReset();
 		
-		//long cycleGranularity = 5_000L; //At about 29780.5 cycles per frame (depending on machine), this gives us on average 6 iterations before we receive a frame
-		//double framesPerSecond = 60.0;
-		//long millisPerFrame = (long) (1.0/(framesPerSecond / 1000.0));
-		//double cyclesPerFrame = 29780.5;
-		double cyclesPerSecond = 236250000 / 11.0; //this is correct for NES but not gameboy
-		double cyclesPerMilli = cyclesPerSecond / 1000.0;
-		//System.out.println("Cycles/Second: "+cyclesPerSecond+", Cycles/Milli: "+cyclesPerMilli+", Millis/Frame: "+millisPerFrame);
-		//Attempt to run in 4msec chunks
-		long cyclesPerFourMillis = (long) (cyclesPerMilli * 4.0);
+		
+		/*
+		 * Let's Talk: Core t`iming strategy!
+		 * 
+		 * We clock on the Core's video refresh rate, whether or not that's a good fit for our own. Because we're
+		 * nowhere near fullscreen exclusive mode, whatever we present will likely be filtered through a compositor and
+		 * a window manager, so all we can really do is present the frames "when" the frames "happen" and hope the OS
+		 * sorts things out okay. Accordingly, we will focus on the emulated hardware's "when"s and try to find the best
+		 * places to wait around to equalize the two timelines.
+		 * 
+		 * The best-case scenario is to use PeriodicTimer; it combines the most accurate, low-granularity time source
+		 * available to the system with careful handling of fractional time and jitter management. So any time the
+		 * emulated system produces a frame "within reasonable time", we will then ask PeriodicTimer to sync up the time
+		 * streams for us.
+		 * 
+		 * But what is "reasonable time"? We're talking about emulating systems from 2.8MHz up to about 28MHz - as low
+		 * as 35ns per instruction, as high as 357ns. From my tests, calling System.currentTimeMillis or System.nanoTime
+		 * eats up half a millisecond to a millisecond - up to 1,000,000ns! We absolutely cannot use functions which
+		 * execute in these time scales on a per-cycle or per-instruction basis, we'd have no time left for emulating!
+		 * 
+		 * (note: I have seen some reported benchmarks of these functions as low as 25ns. I have never seen numbers this
+		 * low in practice, and I live in a linux world where fast monotonic clocks are the norm. Either way, 25ns out
+		 * of a 35ns budget places per-instruction timing firmly out of reach)
+		 * 
+		 * So rather than measuring real-world time, let's think about what that means to the emulated hardware: there
+		 * is a CPU, and that CPU has a clock frequency, so a certain number of clock cycles should equate to a concrete
+		 * elapsed time in the emulated timeline. If that elapsed time is equal to two cycles' worth of video refresh,
+		 * then there's no video to time our emulation by and we'd better start using CPU cycles to sync up the
+		 * timelines. Luckily, we know we just ate up 1/30th of a second (or whatever two divided by the video refresh
+		 * rate winds up being) and can call PeriodicTimer twice to scrub forward to the equivalent moment in actual
+		 * real-world time.
+		 * 
+		 * So, what do we need? cyclesPerFrame. We can find this conversion ratio by taking the cpu cyclesPerSecond
+		 * times 1/framesPerSecond. The seconds cancel out, and we're left with cycles/frames.
+		 * 
+		 * For the DMG, for example, this is 4194304 * (1/59.73) == 70220 cycles per frame. Therefore if we do not
+		 * receive any frames from the core after stepping it through 140442 clock cycles, we can safely skip two frames
+		 * worth of real-world time and return to the top of the emulation loop.
+		 */
+		
+		double framesPerSecond = core.getRefreshRate();
+		double cyclesPerFrame = core.getClockSpeed() * (1.0/framesPerSecond);
+		long cyclesPerTwoFrames = (long) (cyclesPerFrame * 2.0);
+		//double millisPerFrame = 1.0 / (framesPerSecond / 1000.0);
+		
+		//double cyclesPerSecond = core.getClockSpeed();
+		//double cyclesPerMilli = cyclesPerSecond / 1000.0;
+		//long cyclesPerFourMillis = (long) (cyclesPerMilli * 4.0);
 		
 		//now = now();
 		lastDisplay = now;
-		PeriodicTimer timer = PeriodicTimer.forFPS(59.73);
+		PeriodicTimer timer = PeriodicTimer.forFPS(framesPerSecond);
 		
 		long toClock = 0;
 		while(!core.isStopped()) {
@@ -132,32 +171,21 @@ public class JaMES {
 				}
 				
 				
+				//updateOverlays();
+				display.present();
+				framePresented = false;
 				
-				//try {
-					updateOverlays();
-					display.present();
-					framePresented = false;
-					//Thread.sleep(10);
-					
-				//} catch (InterruptedException e) {
-				//	e.printStackTrace();
-				//}
-				
-				long iterations = 0;
+				long cyclesWithoutFrame = 0;
 				while (!framePresented) {
 					if (core.isStopped()) break;
-					toClock += cyclesPerFourMillis;
-					while(toClock>0) {
-						toClock -= core.clock();
-						if (core.isStopped()) break;
-					}
-					now = now();
+					cyclesWithoutFrame += core.clock();
 					
-					iterations++;
-					if (iterations>22000) {
-						iterations = 0;
-						updateOverlays();
+					if (cyclesWithoutFrame > cyclesPerTwoFrames) {
+						cyclesWithoutFrame = 0;
+						//updateOverlays();
 						display.present();
+						timer.waitForPeriod();
+						timer.waitForPeriod();
 					}
 				}
 				

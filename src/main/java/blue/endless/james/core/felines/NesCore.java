@@ -208,4 +208,18 @@ public class NesCore implements Core {
 	public void connectBios(byte[] bios) {
 		
 	}
+
+	@Override
+	public double getRefreshRate() {
+		return 59.826;
+	}
+
+	@Override
+	public double getClockSpeed() {
+		//The system master clock is 236,250,000Hz crystal divided by 11 == 21,477,272.7 Hz
+		
+		//The CPU clock is that 21,477,272.7Hz master clock divided by 12 == 1789772.7 Hz
+		
+		return 1789773;
+	}
 }

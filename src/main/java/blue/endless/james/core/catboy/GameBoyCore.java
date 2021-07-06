@@ -34,6 +34,8 @@ public class GameBoyCore implements Core {
 		cpuBus.map(vram, 0x8000);
 		cpuBus.map(ram,  0xC000, 0x3E00); //Mirrored up to FE00, size=3E00
 		cpuBus.map(oam, 0xFE00);
+		
+		cpuBus.map(this::readJoypad, this::writeJoypad, 0xFF00);
 		cpuBus.map(this::readSerialData, this::writeSerialData, 0xFF01);
 		cpuBus.map(this::writeSerialControl, 0xFF02);
 		
@@ -41,18 +43,21 @@ public class GameBoyCore implements Core {
 		cpuBus.map(cpu::readTimerCounter, cpu::writeTimerCounter, 0xFF05);
 		cpuBus.map(cpu::readTimerResetValue, cpu::writeTimerResetValue, 0xFF06);
 		cpuBus.map(cpu::readTimerControl, cpu::writeTimerControl, 0xFF07);
+		cpuBus.map(interruptFlag, 0xFF0F);
 		cpuBus.map(ppu::readLcdControl, ppu::writeLcdControl, 0xFF40);
 		cpuBus.map(ppu::readLcdStatus, ppu::writeLcdStatus, 0xFF41);
 		cpuBus.map(ppu::readSCY, ppu::writeSCY, 0xFF42);
 		cpuBus.map(ppu::readSCX, ppu::writeSCX, 0xFF43);
 		cpuBus.map(ppu::readLcdY, 0xFF44);
-		
 		cpuBus.map(this::writeOamDma, 0xFF46);
 		cpuBus.map(ppu::readBGP, ppu::writeBGP, 0xFF47);
+		cpuBus.map(ppu::readWindowY, ppu::writeWindowY, 0xFF4A);
+		cpuBus.map(ppu::readWindowX, ppu::writeWindowX, 0xFF4B);
 		cpuBus.map(this::unmapBios, 0xFF50);
 		cpuBus.map(hram, 0xFF80);
-		cpuBus.map(this::readJoypad, this::writeJoypad, 0xFF00);
-		cpuBus.map(interruptFlag, 0xFF0F);
+		
+		
+		
 		cpuBus.map(interruptEnable, 0xFFFF);
 		cpu.bus = cpuBus;
 		
@@ -206,5 +211,15 @@ public class GameBoyCore implements Core {
 		if (this.cart != null) cpuBus.unmap(this.cart);
 		this.cart = null;
 		cpuBus.map(mapper);
+	}
+
+	@Override
+	public double getRefreshRate() {
+		return 59.73;
+	}
+
+	@Override
+	public double getClockSpeed() {
+		return 4194304; //or 8388608 for GBC-mode
 	}
 }

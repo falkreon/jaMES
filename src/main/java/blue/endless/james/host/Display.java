@@ -27,7 +27,7 @@ public class Display {
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		frame.setSize(640, 640);
 		
-		controls.bind(KeyEvent.VK_TAB, "Select");
+		controls.bind(KeyEvent.VK_Q, "Select");
 		controls.bind(KeyEvent.VK_ENTER, "Start");
 		controls.bind(KeyEvent.VK_Z, "A");
 		controls.bind(KeyEvent.VK_A, "A");
