@@ -25,6 +25,9 @@ public class GameBoyCore implements Core {
 	public String serialConsoleLine = "";
 	private byte[] interruptEnable = new byte[1];
 	private byte[] interruptFlag = new byte[1];
+	private ControlSet controls = null;
+	private boolean isJoypadAction = false;
+	private boolean isJoypadDirection = false;
 	
 	public GameBoyCore() {
 		cpuBus.setUnmappedValue(0xFF);
@@ -48,6 +51,7 @@ public class GameBoyCore implements Core {
 		cpuBus.map(ppu::readBGP, ppu::writeBGP, 0xFF47);
 		cpuBus.map(this::unmapBios, 0xFF50);
 		cpuBus.map(hram, 0xFF80);
+		cpuBus.map(this::readJoypad, this::writeJoypad, 0xFF00);
 		cpuBus.map(interruptFlag, 0xFF0F);
 		cpuBus.map(interruptEnable, 0xFFFF);
 		cpu.bus = cpuBus;
@@ -113,7 +117,7 @@ public class GameBoyCore implements Core {
 	
 	@Override
 	public void connectControls(ControlSet controls) {
-		
+		this.controls = controls;
 	}
 	
 	public boolean isStopped() {
@@ -164,6 +168,30 @@ public class GameBoyCore implements Core {
 		} else {
 			//System.out.println("ABNORMAL Serial control out: 0x"+Integer.toHexString(i));
 		}
+	}
+	
+	public int readJoypad() {
+		int value = 0xFF;
+		if (controls!=null) {
+			if (isJoypadAction) {
+				if (controls.get("A")) value &= ~0x01;
+				if (controls.get("B")) value &= ~0x02;
+				if (controls.get("Select")) value &= ~0x04;
+				if (controls.get("Start")) value &= ~0x08;
+			}
+			if (isJoypadDirection) {
+				if (controls.get("Right")) value &= ~0x01;
+				if (controls.get("Left")) value &= ~0x02;
+				if (controls.get("Up")) value &= ~0x04;
+				if (controls.get("Down")) value &= ~0x08;
+			}
+		}
+		return value;
+	}
+	
+	public void writeJoypad(int value) {
+		isJoypadDirection = ((value & 0x10)==0);
+		isJoypadAction = ((value & 0x20)==0);
 	}
 
 	public void mapRom(byte[] cart) {

@@ -24,8 +24,10 @@ public class DmgPpu {
 	private boolean lcdEnable = false;
 	private boolean absoluteBG = true;
 	private boolean useHighTilemap = false;
-	//private int bgTileArea = 0x8800;
+	private boolean windowHighTilemap = false;
 	private boolean tallSprites = false;
+	private boolean enableBackground = true;
+	private boolean enableWindow = false;
 	private boolean enableSprites = false;
 	
 	
@@ -92,54 +94,81 @@ public class DmgPpu {
 					int fineX = (truePixel+scx) % 8;
 					int fineY = (scanline+scy) % 8;
 					
-					int tilemapIndex = (coarseY*32) + coarseX;
-					
-					int tilemapStart = (useHighTilemap) ? 0x9C00 : 0x9800;
-					int tileId = bus.read(tilemapStart+tilemapIndex);
-					
-					//int tileId = (coarseY*20) + coarseX; //256x256 field can fit 32, but we can't see them all
-					int charDataStart = 0;
-					if (!absoluteBG) {
-						if ((tileId & 0x80)!=0) {
-							charDataStart = 0x9000 + ((tileId&0x7F)*16);
-						} else {
-							tileId &= 0x7F;
-							charDataStart = 0x8800 + ((tileId&0x7F)*16);
-						}
+					int tilePal = 0; //the palette ID for the background tile, important for sprite priority
+					if (enableBackground) {
+						int tilemapIndex = (coarseY*32) + coarseX;
 						
+						int tilemapStart = (useHighTilemap) ? 0x9C00 : 0x9800;
+						int tileId = bus.read(tilemapStart+tilemapIndex);
+						
+						//int tileId = (coarseY*20) + coarseX; //256x256 field can fit 32, but we can't see them all
+						int charDataStart = 0;
+						if (!absoluteBG) {
+							//if ((tileId & 0x80)!=0) tileId &= ~0xFF;
+							//charDataStart = 0x8800 + tileId;
+							
+							
+							if ((tileId & 0x80)!=0) {
+								tileId &= 0x7F;
+								charDataStart = 0x8800 + (tileId*16);
+							} else {
+								tileId &= 0x7F;
+								//tileId = -tileId;
+								//tileId = 1;
+								charDataStart = 0x9000 + (tileId*16);
+							}
+							
+						} else {
+							charDataStart = 0x8000 + (tileId*16);
+						}
+						charDataStart += (fineY*2);
+						//if (fineX==0) System.out.println("TileId: "+Integer.toHexString(tileId));
+						int tileRowLo = bus.read(charDataStart);
+						int tileRowHi = bus.read(charDataStart + 1);
+						int tileBitLo = (tileRowLo >> (7-fineX)) & 0x01;
+						int tileBitHi = (tileRowHi >> (7-fineX)) & 0x01;
+						
+						tilePal = (tileBitHi << 1) | tileBitLo;
+						
+						int color = (bgp>>(tilePal*2)) & 0x03;
+						color = palette[color];
+						
+						//int color = palette[tilePal]; //TODO: Map through bgp
+						screen[ofs] = color;
 					} else {
-						charDataStart = 0x8000 + (tileId*16);
+						screen[ofs] = palette[0];
 					}
-					charDataStart += (fineY*2);
-					//if (fineX==0) System.out.println("TileId: "+Integer.toHexString(tileId));
-					int tileRowLo = bus.read(charDataStart);
-					int tileRowHi = bus.read(charDataStart + 1);
-					int tileBitLo = (tileRowLo >> (7-fineX)) & 0x01;
-					int tileBitHi = (tileRowHi >> (7-fineX)) & 0x01;
 					
-					int tilePal = (tileBitHi << 1) | tileBitLo;
-					
-					int color = (bgp>>(tilePal*2)) & 0x03;
-					color = palette[color];
-					
-					//int color = palette[tilePal]; //TODO: Map through bgp
-					
-					screen[ofs] = color;
-					
-					
-					for(Sprite s : oamSearchResult) {
-						if (truePixel>=s.x && truePixel<s.x+8) {
-							int spriteX = truePixel-s.x;
-							int spriteY = scanline - s.y;
-							int spriteDataStart = 0x8000 + (s.tile*16) + (spriteY*2);
-							int spriteRowLo = bus.read(spriteDataStart);
-							int spriteRowHi = bus.read(spriteDataStart + 1);
-							int spriteBitLo = (spriteRowLo >> (7-spriteX)) & 0x01;
-							int spriteBitHi = (spriteRowHi >> (7-spriteX)) & 0x01;
-							
-							int spritePal = (spriteBitHi << 1) | spriteBitLo;
-							
-							screen[ofs] = palette[spritePal];
+					if (enableSprites) {
+						for(Sprite s : oamSearchResult) {
+							if (truePixel>=s.x && truePixel<s.x+8) {
+								int spriteX = truePixel-s.x;
+								int spriteY = scanline - s.y;
+								
+								if ((s.flags & 0x20)!=0) spriteX = 7-spriteX;
+								if ((s.flags & 0x40)!=0) {
+									if (tallSprites) {
+										spriteY = 15-spriteY;
+									} else {
+										spriteY = 7-spriteY;
+									}
+								}
+								
+								if ((s.flags & 0x80)!=0) {
+									if (tilePal!=0) break;
+								}
+								
+								int spriteDataStart = 0x8000 + (s.tile*16) + (spriteY*2);
+								int spriteRowLo = bus.read(spriteDataStart);
+								int spriteRowHi = bus.read(spriteDataStart + 1);
+								int spriteBitLo = (spriteRowLo >> (7-spriteX)) & 0x01;
+								int spriteBitHi = (spriteRowHi >> (7-spriteX)) & 0x01;
+								
+								int spritePal = (spriteBitHi << 1) | spriteBitLo;
+								if (spritePal!=0) {
+									screen[ofs] = PAL_KIROKAZE[spritePal];
+								}
+							}
 						}
 					}
 					
@@ -159,7 +188,7 @@ public class DmgPpu {
 				
 				//if (yPos!=-16 && yPos!=(255-16)) System.out.println("x: "+xPos+" y: "+yPos);
 				
-				boolean enabled = (scanline>=yPos && scanline<yPos+8);
+				boolean enabled = (scanline>=yPos && scanline<yPos+((tallSprites)?16:8));
 				if (enabled) {
 					oamSearchResult.add(new Sprite(xPos, yPos, tileIndex, flags));
 				}
@@ -182,7 +211,8 @@ public class DmgPpu {
 	
 	//0xFF40 : LCDC
 	public void writeLcdControl(int value) {
-		System.out.println("LCDControl: 0x"+Debug.hexByte(value));
+		boolean print = false;
+		if (print) System.out.println("LCDControl: 0x"+Debug.hexByte(value));
 		
 		boolean lastEnable = lcdEnable;
 		lcdEnable = ((value & 0x80) != 0);
@@ -190,18 +220,31 @@ public class DmgPpu {
 		if (lastEnable && !lcdEnable) {
 			Arrays.fill(screen, 0xFF_FFFFFF);
 			onPresentFrame.fire(screen);
-			System.out.println("  LCDC.7 LCD Disable");
+			if (print) System.out.println("  LCDC.7 LCD Disable");
 		} else if (!lastEnable && lcdEnable) {
 			//Arrays.fill(screen, palette[0]);
-			System.out.println("  LCDC.7 LCD Enable");
+			if (print) System.out.println("  LCDC.7 LCD Enable");
 		} else {
-			System.out.println("  LCDC.7 No change (enable: "+lcdEnable+")");
+			if (print) System.out.println("  LCDC.7 No change (enable: "+lcdEnable+")");
 		}
-		absoluteBG = ((value & 0x10)!=0);
-		System.out.println("  LCDC.4 Absolute BG: "+absoluteBG);
+		
+		windowHighTilemap = ((value & 0x40) != 0);
+		if (print) System.out.println("  LCDC.6 High Tilemap: "+windowHighTilemap);
+		
+		absoluteBG = ((value & 0x10) != 0);
+		if (print) System.out.println("  LCDC.4 Absolute BG: "+absoluteBG);
 		
 		useHighTilemap = ((value & 0x08) != 0);
-		System.out.println("  LCDC.3 use High Tilemap: "+useHighTilemap);
+		if (print) System.out.println("  LCDC.3 use High Tilemap: "+useHighTilemap);
+		
+		tallSprites = ((value & 0x04) != 0);
+		if (print) System.out.println("  LCDC.2 Tall Sprites: "+tallSprites);
+		
+		enableSprites = ((value & 0x02) != 0);
+		if (print) System.out.println("  LCDC.1 Enable Sprites: "+enableSprites);
+		
+		enableBackground = ((value & 0x01) != 0);
+		if (print) System.out.println("  LCDC.0 Enable background+window: "+enableBackground);
 		
 		//System.out.println("Write LCDControl: 0x"+Integer.toHexString(value));
 	}

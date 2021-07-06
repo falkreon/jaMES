@@ -62,8 +62,9 @@ public class JaMES {
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/ttt.gb")), (GameBoyCore)core);
 			
 			//Commercial games
-			GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/Tetris(World)(RevA).gb")), (GameBoyCore)core);
-			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/metroid2_world.gb")), (GameBoyCore)core);
+			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/Tetris(World)(RevA).gb")), (GameBoyCore)core);
+			GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/metroid2_world.gb")), (GameBoyCore)core);
+			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/kirbys_dream_land.gb")), (GameBoyCore)core);
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/oracle_of_seasons_us.gbc")), (GameBoyCore)core);
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/pokemon_red.gb")), (GameBoyCore)core);
 			

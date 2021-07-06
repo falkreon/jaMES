@@ -155,6 +155,11 @@ public class Sm83 {
 			}
 		}
 		
+		//GBC mode
+		//if (regs.pc==0x100) {
+		//	regs.setA(0x11);
+		//}
+		
 		return cycles;
 	}
 	

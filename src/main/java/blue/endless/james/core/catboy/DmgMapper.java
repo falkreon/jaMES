@@ -136,7 +136,7 @@ public abstract class DmgMapper implements Bus {
 				if (value==0) value=1; //Cannot select bank 0 (or 0x20, or 0x40, or 0x60)
 				selectedBank = selectedBank & 0b1100000;
 				selectedBank = selectedBank | value;
-				System.out.println("Swapped bank to "+selectedBank);
+				//System.out.println("Swapped bank to "+selectedBank);
 			} else if (address >= 0x4000 && address < 0x6000) {
 				//TODO: RAM Bank number / ROM bank upper 2 bits
 			} else if (address >= 0x6000 && address < 0x8000) {
@@ -205,15 +205,15 @@ public abstract class DmgMapper implements Bus {
 				value = value & 0xFF; //lower 8 bits of bank number
 				selectedBank = selectedBank & 0xFF00;
 				selectedBank = selectedBank | value;
-				System.out.println("Swapped bank to "+selectedBank);
+				//System.out.println("Swapped bank to "+selectedBank);
 			} else if (address >= 0x3000 && address < 0x4000) {
 				value = value & 0x01;
 				selectedBank = selectedBank & 0xFF;
 				selectedBank = selectedBank | value;
-				System.out.println("Swapped bank to "+selectedBank);
+				//System.out.println("Swapped bank to "+selectedBank);
 			} else if (address >= 0x4000 && address < 0x6000) {
 				ramBank = value & 0x0F;
-				System.out.println("RAM Bank is now "+ramBank);
+				//System.out.println("RAM Bank is now "+ramBank);
 			} else if (address >= RAM_START && address < RAM_END) {
 				if (!ramEnable) return;
 				int localAddress = (int) address - RAM_START;
