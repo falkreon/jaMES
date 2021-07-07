@@ -51,6 +51,8 @@ public class GameBoyCore implements Core {
 		cpuBus.map(ppu::readLcdY, 0xFF44);
 		cpuBus.map(this::writeOamDma, 0xFF46);
 		cpuBus.map(ppu::readBGP, ppu::writeBGP, 0xFF47);
+		cpuBus.map(ppu::writeOBP0, 0xFF48);
+		cpuBus.map(ppu::writeOBP1, 0xFF49);
 		cpuBus.map(ppu::readWindowY, ppu::writeWindowY, 0xFF4A);
 		cpuBus.map(ppu::readWindowX, ppu::writeWindowX, 0xFF4B);
 		cpuBus.map(this::unmapBios, 0xFF50);

@@ -57,16 +57,19 @@ public class JaMES {
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/11-op a,(hl).gb")), (GameBoyCore)core); //pass
 			
 			//PPU tests
-			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/dmg-acid2.gb")), (GameBoyCore)core);
+			GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/dmg-acid2.gb")), (GameBoyCore)core);
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/opus5.gb")), (GameBoyCore)core);
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/ttt.gb")), (GameBoyCore)core);
 			
 			//Commercial games
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/Tetris(World)(RevA).gb")), (GameBoyCore)core);
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/metroid2_world.gb")), (GameBoyCore)core);
-			GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/kirbys_dream_land.gb")), (GameBoyCore)core);
+			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/kirbys_dream_land.gb")), (GameBoyCore)core);
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/oracle_of_seasons_us.gbc")), (GameBoyCore)core);
 			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/pokemon_red.gb")), (GameBoyCore)core);
+			
+			//GBLoader.loadCartridge(new FileInputStream(new File("testcarts/gb/amazing_spiderman.gb")), (GameBoyCore)core);
+			
 			
 			//INESLoader.loadCartridge(new FileInputStream(new File("donkey_kong.nes")), core);
 			//INESLoader.loadCartridge(new FileInputStream(new File("testcarts/nestest.nes")), core);

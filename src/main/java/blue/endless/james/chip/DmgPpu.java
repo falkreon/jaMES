@@ -44,9 +44,12 @@ public class DmgPpu {
 	 * </li>
 	 */
 	int bgp = 0x00;
+	int obp0 = 0x00;
+	int obp1 = 0x00;
 	int scx = 0;
 	int scy = 0;
 	int[] palette = PAL_WISH;
+	int[] spritePalette = PAL_WISH;
 	
 	public void clock() {
 		if (!lcdEnable) return;
@@ -186,7 +189,7 @@ public class DmgPpu {
 							if (truePixel>=s.x && truePixel<s.x+8) {
 								int spriteX = truePixel-s.x;
 								int spriteY = scanline - s.y;
-								
+								int pal = ((s.flags & 0x10)!=0) ? obp1 : obp0;
 								if ((s.flags & 0x20)!=0) spriteX = 7-spriteX;
 								if ((s.flags & 0x40)!=0) {
 									if (tallSprites) {
@@ -207,8 +210,10 @@ public class DmgPpu {
 								int spriteBitHi = (spriteRowHi >> (7-spriteX)) & 0x01;
 								
 								int spritePal = (spriteBitHi << 1) | spriteBitLo;
+								
 								if (spritePal!=0) {
-									screen[ofs] = PAL_KIROKAZE[spritePal];
+									int spriteColor = (pal>>(spritePal*2)) & 0x03;
+									screen[ofs] = spritePalette[spriteColor];
 								}
 							}
 						}
@@ -253,7 +258,7 @@ public class DmgPpu {
 	
 	//0xFF40 : LCDC
 	public void writeLcdControl(int value) {
-		boolean print = true;
+		boolean print = false;
 		if (print) System.out.println("LCDControl: 0x"+Debug.hexByte(value));
 		
 		boolean lastEnable = lcdEnable;
@@ -342,6 +347,25 @@ public class DmgPpu {
 		return bgp;
 	}
 	
+	public void writeBGP(int value) {
+		bgp = value & 0xFF;
+		
+		//System.out.println("Write to BG Palette: 0x"+Integer.toHexString(value));
+		//System.out.println("  Color 0: "+((bgp >> 0) & 0x03));
+		//System.out.println("  Color 1: "+((bgp >> 2) & 0x03));
+		//System.out.println("  Color 2: "+((bgp >> 4) & 0x03));
+		//System.out.println("  Color 3: "+((bgp >> 6) & 0x03));
+		
+	}
+	
+	public void writeOBP0(int value) {
+		obp0 = value & 0xFF;
+	}
+	
+	public void writeOBP1(int value) {
+		obp1 = value & 0xFF;
+	}
+	
 	//0xFF4A
 	public int readWindowY() {
 		return windowY;
@@ -360,16 +384,7 @@ public class DmgPpu {
 		windowX = value-7;
 	}
 	
-	public void writeBGP(int value) {
-		bgp = value & 0xFF;
-		
-		//System.out.println("Write to BG Palette: 0x"+Integer.toHexString(value));
-		//System.out.println("  Color 0: "+((bgp >> 0) & 0x03));
-		//System.out.println("  Color 1: "+((bgp >> 2) & 0x03));
-		//System.out.println("  Color 2: "+((bgp >> 4) & 0x03));
-		//System.out.println("  Color 3: "+((bgp >> 6) & 0x03));
-		
-	}
+	
 	
 	public ConsumerEvent<int[]> onPresentFrame() {
 		return onPresentFrame;
