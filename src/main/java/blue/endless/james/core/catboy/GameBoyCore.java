@@ -222,6 +222,8 @@ public class GameBoyCore implements Core {
 
 	@Override
 	public double getClockSpeed() {
-		return 4194304; //or 8388608 for GBC-mode
+		return 4194304;
+		//or 8388608 for GBC-mode
+		//some people say 1048576 for the DMG but the numbers here are specified for the rated clock speed.
 	}
 }
