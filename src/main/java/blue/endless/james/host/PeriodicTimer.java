@@ -6,15 +6,14 @@ public class PeriodicTimer {
 	 * time to a certain extent. Likewise, if one frame undershoots its timeslot, the
 	 * next frame may be allowed to overshoot it. Allowing a little jitter may help the
 	 * system maintain a stable rate, but allowing too much can cause the system to
-	 * fishtail. In this case, we allow a frame to "borrow" or "lend" up to 500msec from/to
+	 * fishtail. In this case, we allow a frame to "borrow" or "lend" up to 500ms from/to
 	 * the next frame.
 	 */
 	private static final long MAX_REMAINDER = 5L;
 
 	private long previous;
-	private long period = (long) ((1.0 / 60.0) * 1000.0); // 1/60th of a second in msec
+	private long period = (long) ((1.0 / 60.0) * 1000.0); // 1/60th of a second in ms
 	private long remainder = 0L;
-	private long maxRemainder = MAX_REMAINDER;
 	private long lastTimerError = 0L;
 	private long maxTimerError = 0L;
 	private boolean spinlock = false;
@@ -61,7 +60,7 @@ public class PeriodicTimer {
 	}
 
 	/**
-	 * Do Nothing until our desired timeslice arrives, relinquishing thread control in the meantime. If this
+	 * Do Nothing until our desired time slice arrives, relinquishing thread control in the meantime. If this
 	 * thread is interrupted and control is regained before the desired time, this method will put the thread
 	 * back to sleep as many times as necessary until the desired time arrives.
 	 * @param now           the most recently measured timestamp
@@ -97,7 +96,7 @@ public class PeriodicTimer {
 	}
 
 	/**
-	 * Do Nothing until our desired timeslice arrives, but do not relinquish control of the thread. This is an
+	 * Do Nothing until our desired time slice arrives, but do not relinquish control of the thread. This is an
 	 * inefficient but extremely precise method of timing, so do not do this unless we're too close to reliably
 	 * hit the slice with sleepLock.
 	 * @param now           the most recently measured timestamp
@@ -120,7 +119,7 @@ public class PeriodicTimer {
 	 */
 	private void latch(long now, long remainder) {
 		this.previous = now;
-		this.remainder = Math.min(remainder, maxRemainder);
+		this.remainder = Math.min(remainder, MAX_REMAINDER);
 
 		curErrorSamples++;
 
